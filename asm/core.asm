@@ -79,6 +79,12 @@ SECTION sys_code vstart=0 align=16
         or eax,0000_0000_0000_0000_0000_0000_0000_1100b
         mov cr3,eax
 
+	mov eax,cr0
+
+	or eax,0x80000000
+	
+	mov cr0,eax
+
         mov eax,[0x10000]
 
         hlt
