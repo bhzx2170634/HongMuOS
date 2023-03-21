@@ -4,3 +4,7 @@
 ## API
 - 打印字符 @printString
 - 读取磁盘 @readDisk
+
+### @printString
+
+### @readDisk
