@@ -88,11 +88,12 @@ SECTION sys_code vstart=0 align=16
         mov eax,[0x10000]
 
         hlt
-    
-    
 
     load_relocate_program:
-        ;mov 
+        push ebp
+	mov ebp,esp
+
+	pop ebp
         retf
 
 SECTION sys_data vstart=0 align=16
