@@ -91,10 +91,37 @@ SECTION sys_code vstart=0 align=16
 
     load_relocate_program:
         push ebp
+	push ds
+	push es
+	pushad
+
+	mov ax,0x0038
+	mov ds,ax
+
+	mov ax,0x0020
+	mov es,ax
+
+	mov ebx,[TCB]
+
+	mov eax,es:[ebx]
+	or eax,eax
+	jz .make
+
+	.make:
+		call makeTCB
+
+	popad
+	pop es
+	pop ds
+	pop ebp
+        ret
+    
+    makeTCB:
+    	push ebp
 	mov ebp,esp
 
 	pop ebp
-        retf
+	ret
 
 SECTION sys_data vstart=0 align=16
     system_string db 'The HongMuOS is loading succeeded!',0x0d,0x0a,0x00
@@ -103,7 +130,9 @@ SECTION sys_data vstart=0 align=16
     gdt_in dd 0
     PDT dd 0x50000
     PT dd 0x51000
-    TCB dd 0x6b74
+    TCB dd 0x8e00
+    momery times 8 dd 0xffffffff
+    times 26 dd 0
     salt:
         salt_1:
             db "@printString"
