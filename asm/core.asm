@@ -91,10 +91,25 @@ SECTION sys_code vstart=0 align=16
 
     load_relocate_program:
         push ebp
+	push ds
+	push es
 	mov ebp,esp
 
+	mov ax,0x20
+	mov es,ax
+	mov ax,0x38
+	mov ds,ax
+
+	mov eax,[TCB]
+	call addTIT ;添加任务信息表
+
+	pop es
+	pop ds
 	pop ebp
-        retf
+        ret
+
+    addTIT:
+    	ret
 
 SECTION sys_data vstart=0 align=16
     system_string db 'The HongMuOS is loading succeeded!',0x0d,0x0a,0x00
