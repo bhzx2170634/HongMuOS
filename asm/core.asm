@@ -50,33 +50,41 @@ SECTION sys_code vstart=0 align=16
 
         call 0x0048:print_String
         
+	mov ax,0x20
+	mov es,ax
+
         mov ebx,[PDT]
-        mov [ebp-4],ebx
-        mov ebx,[PT]
-        mov [ebp-8],ebx
+	mov ecx,1024
+	xor esi,esi
+	.b1
+	mov dword es:[ebx+esi],0x00000000
+	add esi,4
 
-        mov ax,0x0020
-        mov ds,ax
-        
-        mov ebx,[ebp-4]
-        mov eax,[ebp-8]
-        or eax,0x00000003
-        mov [ebx+0x00],eax
-        
-        mov ebx,[ebp-8]
-        mov ecx,256
-        xor esi,esi
-        mov eax,0x00000003
-    .@1:
-        mov [ebx+esi],eax
-        add esi,0x04
-        add eax,0x1000
-        loop .@1
+	loop .b1
+	
+	mov dword es:[ebx+4092],0x00020003
+	mov dword es:[ebx+0],0x00021003
 
-        mov eax,cr3
-        and eax,0x000000f3
-        or eax,[ebp-4]
-        or eax,0000_0000_0000_0000_0000_0000_0000_1100b
+	mov ebx,0x00021000
+	xor eax,eax
+	xor esi,esi
+
+	.b2:
+	mov edx,eax
+	or edx,0x00000003
+	mov es:[ebx+esi*4],edx
+	add eax,0x00001000
+	inc esi
+	cmp esi,256
+	jl .b2
+
+	.b3:
+	mov es:[ebx+esi*4],0x00000000
+	inc esi
+	cmp esi,1024
+	jl .b3
+
+        mov eax,0x00020000
         mov cr3,eax
 
 	mov eax,cr0
@@ -85,7 +93,7 @@ SECTION sys_code vstart=0 align=16
 	
 	mov cr0,eax
 
-        mov eax,[0x10000]
+        mov eax,[0x10l000]
 
         hlt
 
@@ -109,6 +117,12 @@ SECTION sys_code vstart=0 align=16
         ret
 
     addTIT:
+    	push ebp
+	mov ebp,esp
+
+	mov 
+
+	pop ebp
     	ret
 
 SECTION sys_data vstart=0 align=16
@@ -116,9 +130,9 @@ SECTION sys_data vstart=0 align=16
     CPU_data times 50 db 0
     gdt_size dw 0
     gdt_in dd 0
-    PDT dd 0x50000
-    PT dd 0x51000
-    TCB dd 0x6b74
+    PDT dd 0x20000
+    PT dd 0x21000
+    TCB dd 0x0
     salt:
         salt_1:
             db "@printString"
