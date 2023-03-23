@@ -19,9 +19,14 @@ SECTION sys_code vstart=0 align=16
 
         call 0x0040:set_Call_GDT
         
-        mov ebx,system_string
+	push ax
         mov ax,0x0038
         mov ds,ax
+	pop ax
+	mov [Call_gate1],ax
+
+	mov ebx,system_string
+
         call 0x0048:print_String
         
         mov eax,0x80000002
@@ -120,6 +125,14 @@ SECTION sys_code vstart=0 align=16
 	jmp 0x0030:flush
 
 	flush:
+	mov ax,0x38
+	mov ds,ax
+
+	mov ax,0x28
+	mov ss,ax
+
+	mov eax,0x00400000
+	mov ebx,
 
         hlt
 
@@ -164,19 +177,69 @@ SECTION sys_data vstart=0 align=16
             db "@printString"
             times 256-($-salt_1) db 0
             dd 0
-            dw 0
+            Call_gate1 dw 0
         salt_2:
             db "@backSystem"
             times 256-($-salt_2) db 0
             dd 0
-            dw 0
+            Call_gate2 dw 0
         salt_3:
             db "@readDisk"
             times 256-($-salt_3) db 0
             dd 0
-            dw 0
+            Call_gate3 dw 0
 
 SECTION sys_routine vstart=0 align=16
+    readDisk:
+    	pushad
+
+	push eax
+
+	mov al,1
+	mov dx,0x1f2
+	out dx,al
+
+	pop eax
+
+	inc dx;dx=0x1f3
+	out dx,al
+
+	inc dx;dx=0x1f4
+	mov cl,8
+	shr eax,cl
+	out dx,al
+
+	inc dx;dx=0x1f5
+	shr eax,cl
+	out dx,al
+
+	inc dx;dx=0x1f6
+	shr eax,cl
+	or al,0xe0
+	out dx,al
+
+	inc dx;dx=0x1f7
+	mov al,0x20
+	out dx,al
+
+	.waits:
+		in al,dx
+		and al.0x88
+		cmp al,0x08
+		jne .waits
+	
+	mov ecx,256
+	mov dx,0x1f0
+	
+	.readw:
+		in ax,dx
+		mov [ebx],ax
+		add ebx,2
+		loop .waits
+
+	popad
+    	retf
+
     set_Call_GDT:
         push ebp
         or ax,bx
