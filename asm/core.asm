@@ -56,7 +56,7 @@ SECTION sys_code vstart=0 align=16
         mov ebx,[PDT]
 	mov ecx,1024
 	xor esi,esi
-	.b1
+	.b1:
 	mov dword es:[ebx+esi],0x00000000
 	add esi,4
 
@@ -79,7 +79,7 @@ SECTION sys_code vstart=0 align=16
 	jl .b2
 
 	.b3:
-	mov es:[ebx+esi*4],0x00000000
+	mov dword es:[ebx+esi*4],0x00000000
 	inc esi
 	cmp esi,1024
 	jl .b3
@@ -93,7 +93,33 @@ SECTION sys_code vstart=0 align=16
 	
 	mov cr0,eax
 
-        mov eax,[0x10l000]
+        mov ebx,0xfffff000
+	mov esi,0x80000000
+
+	shr esi,22
+	shl esi,2
+
+	mov dword es:[ebx+esi],0x00021003
+
+	sgdt [gdt_size]
+
+	mov ebx,[gdt_in]
+
+	or dword es:[ebx+0x08+4],0x80000000
+	or dword es:[ebx+0x10+4],0x80000000
+	or dword es:[ebx+0x18+4],0x80000000
+	or dword es:[ebx+0x28+4],0x80000000
+	or dword es:[ebx+0x30+4],0x80000000
+	or dword es:[ebx+0x38+4],0x80000000
+	or dword es:[ebx+0x40+4],0x80000000
+
+	add dword [gdt_in],0x80000000
+
+	lgdt [gdt_size]
+
+	jmp 0x0030:flush
+
+	flush:
 
         hlt
 
@@ -120,7 +146,7 @@ SECTION sys_code vstart=0 align=16
     	push ebp
 	mov ebp,esp
 
-	mov 
+	mov ebx,eax
 
 	pop ebp
     	ret
