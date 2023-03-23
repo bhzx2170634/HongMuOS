@@ -19,11 +19,9 @@ SECTION sys_code vstart=0 align=16
 
         call 0x0040:set_Call_GDT
         
-	push ax
         mov ax,0x0038
         mov ds,ax
-	pop ax
-	mov [Call_gate1],ax
+	mov [Call_gate1],bx
 
 	mov ebx,system_string
 
@@ -132,7 +130,15 @@ SECTION sys_code vstart=0 align=16
 	mov ss,ax
 
 	mov eax,0x00400000
-	mov ebx,
+	mov ebx,readDisk
+
+	call 0x0040:set_Call_GDT
+
+	mov [Call_gate2],bx
+
+	mov ebx,load_after
+
+	call far [printString]
 
         hlt
 
@@ -165,29 +171,26 @@ SECTION sys_code vstart=0 align=16
     	ret
 
 SECTION sys_data vstart=0 align=16
-    system_string db 'The HongMuOS is loading succeeded!',0x0d,0x0a,0x00
+    load_after db "The call gate was installed successfully.",0x0d,0x0a,0x00
+    system_string db "The HongMuOS is loading succeeded!",0x0d,0x0a,0x00
     CPU_data times 50 db 0
     gdt_size dw 0
     gdt_in dd 0
     PDT dd 0x20000
     PT dd 0x21000
-    TCB dd 0x0
+    TCB dd 0x00
+    core_next_laddr dd 0x80100000
     salt:
         salt_1:
             db "@printString"
             times 256-($-salt_1) db 0
-            dd 0
+            printString dd 0
             Call_gate1 dw 0
         salt_2:
-            db "@backSystem"
-            times 256-($-salt_2) db 0
-            dd 0
-            Call_gate2 dw 0
-        salt_3:
             db "@readDisk"
             times 256-($-salt_3) db 0
-            dd 0
-            Call_gate3 dw 0
+            readDisk dd 0
+            Call_gate2 dw 0
 
 SECTION sys_routine vstart=0 align=16
     readDisk:
@@ -283,6 +286,8 @@ SECTION sys_routine vstart=0 align=16
         add word [gdt_size],8
 
         lgdt [gdt_size]
+
+	mov ebx,edi
 
         pop es
 
