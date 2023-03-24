@@ -140,6 +140,10 @@ SECTION sys_code vstart=0 align=16
 
 	call far [printString]
 
+	mov ebx,[core_next_laddr]
+
+	call 0x0040:alloc_inst_a_page
+
         hlt
 
     load_relocate_program:
@@ -180,6 +184,11 @@ SECTION sys_data vstart=0 align=16
     PT dd 0x21000
     TCB dd 0x00
     core_next_laddr dd 0x80100000
+    page_bit_map db times 32 db 0xff
+    times 16 db 0x55
+    times 80 db 0x00
+    page_bit_len equ $-page_bit_map
+    msg_not_have_page db "*****No moer pages"
     salt:
         salt_1:
             db "@printString"
@@ -193,6 +202,77 @@ SECTION sys_data vstart=0 align=16
             Call_gate2 dw 0
 
 SECTION sys_routine vstart=0 align=16
+    alloc_a_4k_page:
+	push ebx
+	pish ecx
+	push edx
+	push ds
+
+	mov eax,0x0038
+	mov ds,eax
+	
+	xor eax,eax
+
+	.b1:
+	bts [page_bit_map],eax
+	jnc .b2
+	inc eax
+	cmp eax,page_bit_len*8
+	jl .b1
+
+	mov ebx,msg_not_have_page
+	call far [printString]
+	hlt
+
+	shr eax,12
+
+	pop ds
+	pop edx
+	pop ecx
+	pop ebx
+	ret
+    alloc_inst_a_page:
+    	push eax
+	push ebx
+	push esi
+	push ds
+
+	mov eax,0x0020
+	mov ds,eax
+
+	mov esi,ebx
+	and esi,0xffc00000
+
+	shr esi,20
+	or esi,0xffffff000
+
+	test dword [esi],0x00000001
+
+	jnz .b1
+
+	call alloc_a_4k_page
+	or eax,0x00000007
+	mov [esi],ebx
+
+	.b1:
+	mov esi,ebx
+	shr esi,10
+	and esi,0x003ff000
+	or esi,0xffc00000
+
+	and ebx,0x003ff000
+	shr ebx,10
+	or esi,ebx
+
+	call alloc_a_4k_page
+	or eax,0x00000007
+	mov [esi],eax
+
+	pop ds
+	pop esi
+	pop ebx
+	pop eax
+	retf
     readDisk:
     	pushad
 
@@ -273,12 +353,12 @@ SECTION sys_routine vstart=0 align=16
         add ebp,edi
 
         push es
-        push ax
+        push eax
 
-        mov ax,0x20
-        mov es,ax
+        mov eax,0x20
+        mov es,eax
 
-        pop ax
+        pop eax
 
         mov es:[ebp+0x00],eax
         mov es:[ebp+0x04],ebx
@@ -300,15 +380,15 @@ SECTION sys_routine vstart=0 align=16
         push es
         push ds
 
-        push ax
+        push eax
 
-        mov ax,0x0038
+        mov eax,0x0038
         mov es,ax
 
-        mov ax,0x0020
-        mov ds,ax
+        mov eax,0x0020
+        mov ds,eax
 
-        pop ax
+        pop eax
 
         sgdt [es:gdt_size]
 
@@ -400,8 +480,8 @@ SECTION sys_routine vstart=0 align=16
 
         .put_other:
             push es
-            mov ax,0x0018
-            mov es,ax
+            mov eax,0x0018
+            mov es,eax
 
             shl bx,1
 
@@ -416,9 +496,9 @@ SECTION sys_routine vstart=0 align=16
             push es
             push ds
 
-            mov ax,0x0018
-            mov ds,ax
-            mov es,ax
+            mov eax,0x0018
+            mov ds,eax
+            mov es,eax
 
             mov edi,0x00
             mov esi,0xa0
