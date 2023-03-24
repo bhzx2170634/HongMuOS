@@ -130,7 +130,7 @@ SECTION sys_code vstart=0 align=16
 	mov ss,ax
 
 	mov eax,0x00400000
-	mov ebx,readDisk
+	mov ebx,read_Disk
 
 	call 0x0040:set_Call_GDT
 
@@ -144,34 +144,143 @@ SECTION sys_code vstart=0 align=16
 
 	call 0x0040:alloc_inst_a_page
 
+	add dword [core_next_laddr],4096
+
+	mov word es:[ebx+0],0
+
+	mov eax,cr3
+	mov es:[ebx+28],eax
+
+	mov dword es:[ebx+100],0
+
+	mov dword es:[ebx+102],103
+
+	mov eax,ebx
+	mov ebx,103
+	mov ecx,0x00408900
+
+	call 0x0040:set_gdt
+
+	mov [program_man_tss+4],bx
+
+	ltr cx
+
+	mov ebx,[core_next_laddr]
+	call 0x0040:alloc_inst_a_page
+	add dword [core_next_laddr],4096
+
+	mov dword es:[ebx+0x06],0
+
+	mov word es:[ebx+0x0a],0xffff
+
+	mov ecx,ebx
+	call addTIT
+
+	push dword 100
+
+	push ecx
+
+	call load_relocate_program
+
         hlt
 
     load_relocate_program:
-        push ebp
+        pushad
 	push ds
 	push es
 	mov ebp,esp
 
-	mov ax,0x20
-	mov es,ax
-	mov ax,0x38
-	mov ds,ax
+	mov eax,0x20
+	mov es,eax
 
-	mov eax,[TCB]
-	call addTIT ;添加任务信息表
+	mov ebx,0xfffff000
+	xor esi,esi
+
+	.b1:
+	mov dword es:[ebx+esi*4],0x00000000
+	inc esi
+	cmp esi,0x512
+	jl .b1
+
+	mov eax,0x38
+	mov ds,eax
+
+	mov eax,[ebp+12*4]
+	mov ebx,core_buff
+
+	call far [readDisk]
+
+	mov eax,[core_buff]
+	and ebx,0xfffff000
+	add ebx,0x1000
+	test eax,0x00000fff
+	cmovz eax,ebx
+
+	mov ecx,eax
+	shr ecx,12
+
+	mov eax,[ebp+12*4]
+	mov esi,[ebp+11*4]
+
+	.b2:
+	mov ebx,es:[esi+0x06]
+	add dword es:[esi+0x06],0x1000
+	call 0x0040:alloc_inst_a_page
+
+	push ecx
+	mov ecx,8
+
+	.b3:
+	call far [readDisk]
+	inc eax
+	loop .b3
+
+	pop ecx
+	loop .b2
 
 	pop es
 	pop ds
-	pop ebp
+	popad
         ret
 
     addTIT:
+    	push eax
+	push edx
+	push es
+	push ds
     	push ebp
 	mov ebp,esp
 
-	mov ebx,eax
+	mov eax,0x0038
+	mov ds,eax
 
+	mov eax,0x0020
+	mov es,eax
+
+	mov dword es:[ecx+0x00],0
+
+	mov eax,[TCB]
+	or eax,eax
+	jnz .notcb
+
+	.searc:
+	mov edx,eax
+	mov eax,es:[edx+0x00]
+	or eax,eax
+	jnz .searc
+
+	mov es:[edx+0x00],ecx
+	jmp .retpc
+
+	.notcb:
+	mov [TCB],ecx
+
+	.retpc:
 	pop ebp
+	pop ds
+	pop es
+	pop edx
+	pop eax
     	ret
 
 SECTION sys_data vstart=0 align=16
@@ -183,12 +292,15 @@ SECTION sys_data vstart=0 align=16
     PDT dd 0x20000
     PT dd 0x21000
     TCB dd 0x00
+    core_buff times 512 db 0
     core_next_laddr dd 0x80100000
-    page_bit_map db times 32 db 0xff
+    page_bit_map times 32 db 0xff
     times 16 db 0x55
     times 80 db 0x00
     page_bit_len equ $-page_bit_map
-    msg_not_have_page db "*****No moer pages"
+    msg_not_have_page db "*****No moer pages*****"
+    program_man_tss dd 0
+    dw 0
     salt:
         salt_1:
             db "@printString"
@@ -197,14 +309,14 @@ SECTION sys_data vstart=0 align=16
             Call_gate1 dw 0
         salt_2:
             db "@readDisk"
-            times 256-($-salt_3) db 0
+            times 256-($-salt_2) db 0
             readDisk dd 0
             Call_gate2 dw 0
 
 SECTION sys_routine vstart=0 align=16
     alloc_a_4k_page:
 	push ebx
-	pish ecx
+	push ecx
 	push edx
 	push ds
 
@@ -224,6 +336,7 @@ SECTION sys_routine vstart=0 align=16
 	call far [printString]
 	hlt
 
+	.b2:
 	shr eax,12
 
 	pop ds
@@ -244,7 +357,7 @@ SECTION sys_routine vstart=0 align=16
 	and esi,0xffc00000
 
 	shr esi,20
-	or esi,0xffffff000
+	or esi,0xfffff000
 
 	test dword [esi],0x00000001
 
@@ -273,7 +386,8 @@ SECTION sys_routine vstart=0 align=16
 	pop ebx
 	pop eax
 	retf
-    readDisk:
+
+    read_Disk:
     	pushad
 
 	push eax
@@ -307,7 +421,7 @@ SECTION sys_routine vstart=0 align=16
 
 	.waits:
 		in al,dx
-		and al.0x88
+		and al,0x88
 		cmp al,0x08
 		jne .waits
 	
@@ -399,7 +513,7 @@ SECTION sys_routine vstart=0 align=16
         inc bx
         add ebx,[es:gdt_in]
         mov [ebx+0x00],eax
-        mov [ebx+0x04],eax
+        mov [ebx+0x04],edx
 
         add word [es:gdt_size],8
 
