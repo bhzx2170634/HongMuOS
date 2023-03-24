@@ -238,10 +238,49 @@ SECTION sys_code vstart=0 align=16
 	pop ecx
 	loop .b2
 
+	mov ebx,[core_next_laddr]
+	call 0x0040:alloc_inst_a_page
+	add dword [core_next_laddr],4096
+
+	mov es:[esi+0x14],ebx
+	mov word es:[esi+0x12],103
+
+	mov ebx,es:[esi+0x06]
+	add dword es:[esi+0x06],0x1000
+	call 0x0040:alloc_inst_a_page
+	mov es:[esi+0x0c],ebx
+
+	mov eax,0x00000000
+	mov ebx,0x000fffff
+	mov ecx,0x00c0f800
+	call 0x0040:make_GDT
+
 	pop es
 	pop ds
 	popad
         ret
+
+    fill_descriptor_ldt:
+    	push eax
+	push edx
+	push edi
+
+	mov ecx,0x0020
+	mov ds,ecx
+
+	mov edi,es:[ebx+0x0c]
+
+	xor ecx,ecx
+	mov cx,es:[ebx+0x0a]
+	inc cx
+
+	mov es:[edi+ecx+0x00],eax
+	mov es:[edi+ecx+0x04],edx
+
+	add cx,8
+	dec cx
+
+	mov es:[ebx+0x0a],cx
 
     addTIT:
     	push eax
@@ -506,7 +545,7 @@ SECTION sys_routine vstart=0 align=16
 
         sgdt [es:gdt_size]
 
-        call make_GDT
+        call 0x0040:make_GDT
 
         xor ebx,ebx
         mov bx,[es:gdt_size]
@@ -539,7 +578,7 @@ SECTION sys_routine vstart=0 align=16
 
         or edx,ecx
 
-        ret
+        retf
 
     print_String:
         push ecx
