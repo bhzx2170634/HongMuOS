@@ -253,7 +253,28 @@ SECTION sys_code vstart=0 align=16
 	mov eax,0x00000000
 	mov ebx,0x000fffff
 	mov ecx,0x00c0f800
-	call 0x0040:make_GDT
+
+	call 0x0040:make_DT
+
+	mov ebx,esi
+	call fill_descriptor_ldt
+
+	mov ebx,es:[esi+0x14]
+
+	mov es:[ebx+76],cx;填写TSS的cs
+
+	mov eax,0x00000000
+	mov ebx,0x000fffff
+	mov ecx,0x00c0f200
+
+	call 0x0040:make_DT
+
+	mov ebx,es:[esi+0x14]
+
+	mov es:[ebx+84],cx;填写TSS的ds
+	mov es:[ebx+72],cx;填写TSS的es
+	mov es:[ebx+88],cx;填写TSS的fs
+	mov es:[ebx+92],cx;填写TSS的gs
 
 	pop es
 	pop ds
@@ -268,19 +289,33 @@ SECTION sys_code vstart=0 align=16
 	mov ecx,0x0020
 	mov ds,ecx
 
-	mov edi,es:[ebx+0x0c]
+	mov edi,[ebx+0x0c]
 
 	xor ecx,ecx
-	mov cx,es:[ebx+0x0a]
+	mov cx,[ebx+0x0a]
 	inc cx
 
-	mov es:[edi+ecx+0x00],eax
-	mov es:[edi+ecx+0x04],edx
+	mov [edi+ecx+0x00],eax
+	mov [edi+ecx+0x04],edx
 
 	add cx,8
 	dec cx
 
-	mov es:[ebx+0x0a],cx
+	mov [ebx+0x0a],cx
+
+	mov ax,cx
+	xor dx,dx
+	mov cx,8
+	div cx
+	
+	mov cx,ax
+	shl cx,3
+	or cx,0x0004
+
+	pop edi
+	pop edx
+	pop eax
+	ret
 
     addTIT:
     	push eax
@@ -545,7 +580,7 @@ SECTION sys_routine vstart=0 align=16
 
         sgdt [es:gdt_size]
 
-        call 0x0040:make_GDT
+        call 0x0040:make_DT
 
         xor ebx,ebx
         mov bx,[es:gdt_size]
@@ -563,7 +598,7 @@ SECTION sys_routine vstart=0 align=16
         pop edx
         retf
 
-    make_GDT:
+    make_DT:
         mov edx,eax
         mov ax,bx
         rol eax,16
