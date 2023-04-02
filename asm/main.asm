@@ -1,10 +1,11 @@
 core_start_sector equ 0x00000001
 
+SECTION main vstart=0x00007c00
 mov ax,cs
 mov ds,ax
 
-mov ax,[0x7c00+gdt_in]
-mov dx,[0x7c00+gdt_in+0x2]
+mov ax,[gdt_in]
+mov dx,[gdt_in+0x2]
 
 mov bx,16
 div bx
@@ -16,28 +17,16 @@ mov bx,dx
 mov dword [bx+0x00],0x00
 mov dword [bx+0x04],0x00
 
-;主引导代码
-mov dword [bx+0x08],0x7c0001ff
-mov dword [bx+0x0c],0x00409800
+;全局代码
+mov dword [bx+0x08],0x0000ffff
+mov dword [bx+0x0c],0x00cf9800
 
-;主引导数据
-mov dword [bx+0x10],0x7c0001ff
-mov dword [bx+0x14],0x00409200
+;全局数据
+mov dword [bx+0x10],0x0000ffff
+mov dword [bx+0x14],0x00cf9200
 
-;显示段
-mov dword [bx+0x18],0x80007fff
-mov dword [bx+0x1c],0x0040920b
-
-;4GB全局数据段
-mov dword [bx+0x20],0x0000ffff
-mov dword [bx+0x24],0x00cf9200
-
-;栈段
-mov dword [bx+0x28],0x7c00fffe
-mov dword [bx+0x2c],0x004f9600
-
-mov word [cs:gdt_size+0x7c00],47
-lgdt [cs:gdt_size+0x7c00]
+mov word [cs:gdt_size],47
+lgdt [cs:gdt_size]
 
 in al,0x92
 or al,2
@@ -105,30 +94,13 @@ push eax
          pop eax
       
          ret
-make_GDT: 
-    mov edx,eax
-    mov ax,bx
-    rol eax,16
-    mov ax,dx
-    ror eax,16
-    
-    and edx,0xffff0000
-    rol edx,8
-    bswap edx
-    and ebx,0x000f0000
-    or edx,ebx
-
-    or edx,ecx
-
-    ret
 
 flush:
-    mov cx,0x0028
+    mov cx,0x0010
     mov ss,cx
-    mov esp,0xffffffff
+    mov esp,0x00007c00
     mov eax,core_start_sector
     mov ebx,0x00010000
-    mov cx,0x0020
     mov ds,cx
 
     call read_disk
@@ -146,7 +118,7 @@ flush:
 
     .@1:
         or eax,eax
-        jz setup
+        jz pages
         mov ecx,eax
         mov eax,core_start_sector
         inc eax
@@ -155,53 +127,42 @@ flush:
             inc eax
             loop .@2
     
-    setup:
+    pages:
     
-    mov ebp,0x00010000
-    mov edi,ebp
-    mov eax,ebp
-    add ebp,4
-    mov edx,ds:[ebp]
-    mov ebx,ds:[ebp+0x04]
-    add eax,edx
-    sub ebx,edx
-    mov ecx,0x00409800
+    mov ebx,0x00020000
+    mov dword [ebx+4096],0x00020003
 
-    call make_GDT
+    mov edx,0x00021003
 
-    mov [0x7e00+0x30],eax
-    mov [0x7e00+0x34],edx
+    mov [ebx+0x000],edx
+    mov [ebx+0x800],edx
 
-    add ebp,4
-    mov eax,edi
-    mov edx,ds:[ebp]
-    mov ebx,ds:[ebp+0x04]
-    add eax,edx
-    sub ebx,edx
-    mov ecx,0x00409200
-    
-    call make_GDT
+    mov ebx,0x00021000
+    xor eax,eax
+    xor esi,esi
 
-    mov [0x7e00+0x38],eax
-    mov [0x7e00+0x3c],edx
+    .b1:
+    	mov edx,eax
+	or edx,0x00000003
+	mov [ebx+esi*4],edx
+	add eax,0x1000
+	inc esi
+	cmp esi,256
+	jl .b1
 
-    add ebp,4
-    mov eax,edi
-    mov edx,ds:[ebp]
-    mov ebx,ds:[edi]
-    add eax,edx
-    sub ebx,edx
-    mov ecx,0x00409800
+    mov eax,0x00020000
+    mov cr3,eax
 
-    call make_GDT
+    or dword [gdt_in],0x80000000
+    lgdt [gdt_size]
 
-    mov [0x7e00+0x40],eax
-    mov [0x7e00+0x44],edx
+    mov eax,cr0
+    or eax,0x80000000
+    mov cr0,eax
 
-    mov word [0x7c00+gdt_size],71
-    lgdt [0x7c00+gdt_size]
+    add esp,0x80000000
 
-    jmp far [edi+0x10]
+    jmp [0x80010004]
 
     hlt
 
