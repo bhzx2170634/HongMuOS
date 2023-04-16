@@ -1,31 +1,113 @@
+SECTION sys_core vstart=0x80010000
+
 core_len dd core_end
 
-code_seg dd section.sys_code.start
-data_seg dd section.sys_data.start
-routine_seg dd section.sys_routine.start
-
 core_entry dd main
-           dw 0x0030
-
-[bits 32]
-
-SECTION sys_code vstart=0 align=16
     main:
         mov ebp,esp
 
-        mov eax,0x00400000
-        mov ebx,print_String
-        mov cl,0
+	mov ebx,[core_next_laddr]
+	call alloc_inst_a_page
 
-        call 0x0040:set_Call_GDT
-        
-        mov ax,0x0038
+	mov [pidt+2],ebx
+
+	push ebx
+	mov ax,cs
+	mov cx,0x8e00
+	mov ebx,exception_handling
+	call make_CGDT
+	pop ebx
+
+	xor esi,esi
+	.idt0:
+	mov [ebx+esi*4+0x00],eax
+	mov [ebx+esi*4+0x04],edx
+	inc esi
+	cmp esi,19
+	jle .idt0
+
+	push ebx
+	mov ebx,hardware_interruption_handling
+	mov ax,cs
+	mov cx,0x8e00
+	call make_CGDT
+	pop ebx
+
+	.idt1:
+	mov [ebx+esi*8],eax
+	mov [ebx+esi*8+4],edx
+	inc esi
+	cmp esi,255
+	jle .idt1
+
+	push ebx
+	mov ebx,int_0x50;时钟
+	mov ax,cs
+	mov cx,0x8e00
+	call make_CGDT
+	pop ebx
+
+	mov [ebx+0x50*8],eax
+	mov [ebx+0x50*8+4],edx
+
+	push ebx;安装api中断
+	mov ebx,int_0x86;api
+	mov eax,cs
+	mov cx,0xee00
+	call make_CGDT
+	pop ebx
+
+	mov [ebx+0x86*8],eax
+	mov [ebx+0x86*8+4],edx
+
+	;准备开放中断
+	mov word [pidt],256*8-1
+	mov [pidt+2],ebx
+	lidt [pidt]
+
+	;设置8259A主片
+	mov al,0x11;边沿触发，多片使用，初始化ICW4
+	out 0x20,al
+	mov al,0x20;中断向量起点0x20
+	out 0x21,al
+	mov al,0x04;从片连接IRQ2
+	out 0x21,al
+	mov al,0x01;非自动结束
+	out 0x21,al
+
+	;设置8259A从片
+	mov al,0x11;边沿触发，多片使用，初始化ICW4
+	out 0x20,al
+	mov al,0x70;中断向量起点0x70
+	out 0x21,al
+	mov al,0x04;从片连接主片IRQ2
+	out 0x21,al
+	mov al,0x01;非自动结束
+	out 0x21,al
+
+	;实时时钟设置
+	mov al,0x0b
+	or al,0x80
+	out 0x70,al
+	mov al,0x12
+	out 0x71,al
+
+	in al,0xa1;读IMR
+	and al,0xfe;清空bit 0
+	out 0xa1,al;写回
+
+	in al,0x0c
+	out 0x70,al
+	in al,0x71
+
+	sti
+
+        mov ax,0x0010
         mov ds,ax
-	mov [Call_gate1],bx
 
 	mov ebx,system_string
 
-        call 0x0048:print_String
+        call print_String
         
         mov eax,0x80000002
         cpuid
@@ -51,98 +133,11 @@ SECTION sys_code vstart=0 align=16
 
         mov ebx,CPU_data
 
-        call 0x0048:print_String
-        
-	mov ax,0x20
-	mov es,ax
-
-        mov ebx,[PDT]
-	mov ecx,1024
-	xor esi,esi
-	.b1:
-	mov dword es:[ebx+esi],0x00000000
-	add esi,4
-
-	loop .b1
-	
-	mov dword es:[ebx+4092],0x00020003
-	mov dword es:[ebx+0],0x00021003
-
-	mov ebx,0x00021000
-	xor eax,eax
-	xor esi,esi
-
-	.b2:
-	mov edx,eax
-	or edx,0x00000003
-	mov es:[ebx+esi*4],edx
-	add eax,0x00001000
-	inc esi
-	cmp esi,256
-	jl .b2
-
-	.b3:
-	mov dword es:[ebx+esi*4],0x00000000
-	inc esi
-	cmp esi,1024
-	jl .b3
-
-        mov eax,0x00020000
-        mov cr3,eax
-
-	mov eax,cr0
-
-	or eax,0x80000000
-	
-	mov cr0,eax
-
-        mov ebx,0xfffff000
-	mov esi,0x80000000
-
-	shr esi,22
-	shl esi,2
-
-	mov dword es:[ebx+esi],0x00021003
-
-	sgdt [gdt_size]
-
-	mov ebx,[gdt_in]
-
-	or dword es:[ebx+0x08+4],0x80000000
-	or dword es:[ebx+0x10+4],0x80000000
-	or dword es:[ebx+0x18+4],0x80000000
-	or dword es:[ebx+0x28+4],0x80000000
-	or dword es:[ebx+0x30+4],0x80000000
-	or dword es:[ebx+0x38+4],0x80000000
-	or dword es:[ebx+0x40+4],0x80000000
-
-	add dword [gdt_in],0x80000000
-
-	lgdt [gdt_size]
-
-	jmp 0x0030:flush
-
-	flush:
-	mov ax,0x38
-	mov ds,ax
-
-	mov ax,0x28
-	mov ss,ax
-
-	mov eax,0x00400000
-	mov ebx,read_Disk
-
-	call 0x0040:set_Call_GDT
-
-	mov [Call_gate2],bx
-
-	mov ebx,load_after
-
-	call far [printString]
+        call print_String
 
 	mov ebx,[core_next_laddr]
 
-	call 0x0040:alloc_inst_a_page
+	call alloc_inst_a_page
 
 	add dword [core_next_laddr],4096
 
@@ -159,14 +154,14 @@ SECTION sys_code vstart=0 align=16
 	mov ebx,103
 	mov ecx,0x00408900
 
-	call 0x0040:set_gdt
+	call set_gdt
 
 	mov [program_man_tss+4],bx
 
 	ltr cx
 
 	mov ebx,[core_next_laddr]
-	call 0x0040:alloc_inst_a_page
+	call alloc_inst_a_page
 	add dword [core_next_laddr],4096
 
 	mov dword es:[ebx+0x06],0
@@ -190,7 +185,7 @@ SECTION sys_code vstart=0 align=16
 	push es
 	mov ebp,esp
 
-	mov eax,0x20
+	mov eax,0x10
 	mov es,eax
 
 	mov ebx,0xfffff000
@@ -208,7 +203,7 @@ SECTION sys_code vstart=0 align=16
 	mov eax,[ebp+12*4]
 	mov ebx,core_buff
 
-	call far [readDisk]
+	call read_Disk
 
 	mov eax,[core_buff]
 	and ebx,0xfffff000
@@ -225,7 +220,7 @@ SECTION sys_code vstart=0 align=16
 	.b2:
 	mov ebx,es:[esi+0x06]
 	add dword es:[esi+0x06],0x1000
-	call 0x0040:alloc_inst_a_page
+	call alloc_inst_a_page
 
 	push ecx
 	mov ecx,8
@@ -325,13 +320,10 @@ SECTION sys_code vstart=0 align=16
     	push ebp
 	mov ebp,esp
 
-	mov eax,0x0038
+	mov eax,0x0010
 	mov ds,eax
 
-	mov eax,0x0020
-	mov es,eax
-
-	mov dword es:[ecx+0x00],0
+	mov dword [ecx+0x00],0
 
 	mov eax,[TCB]
 	or eax,eax
@@ -339,11 +331,11 @@ SECTION sys_code vstart=0 align=16
 
 	.searc:
 	mov edx,eax
-	mov eax,es:[edx+0x00]
+	mov eax,[edx+0x00]
 	or eax,eax
 	jnz .searc
 
-	mov es:[edx+0x00],ecx
+	mov [edx+0x00],ecx
 	jmp .retpc
 
 	.notcb:
@@ -357,14 +349,35 @@ SECTION sys_code vstart=0 align=16
 	pop eax
     	ret
 
-SECTION sys_data vstart=0 align=16
-    load_after db "The call gate was installed successfully.",0x0d,0x0a,0x00
+    int_0x86:
+    	iretd
+
+    int_0x50:
+    	iretd
+
+    exception_handling:
+    	mov ebx,excep_msg
+	call print_String
+	hlt
+
+    hardware_interruption_handling:
+    	push eax
+
+	mov al,0x20
+	out 0xa0,al
+	out 0x20,al
+
+	pop eax
+    	iretd
+
+;----------数据段----------
+    load_after db "The interrupt vector table was installed successfully.",0x0d,0x0a,0x00
     system_string db "The HongMuOS is loading succeeded!",0x0d,0x0a,0x00
     CPU_data times 50 db 0
     gdt_size dw 0
+    pidt dw 0
+    	 dd 0
     gdt_in dd 0
-    PDT dd 0x20000
-    PT dd 0x21000
     TCB dd 0x00
     core_buff times 512 db 0
     core_next_laddr dd 0x80100000
@@ -373,6 +386,7 @@ SECTION sys_data vstart=0 align=16
     times 80 db 0x00
     page_bit_len equ $-page_bit_map
     msg_not_have_page db "*****No moer pages*****"
+    excep_msg db "",0x0d,0x0a,0x00
     program_man_tss dd 0
     dw 0
     salt:
@@ -387,14 +401,14 @@ SECTION sys_data vstart=0 align=16
             readDisk dd 0
             Call_gate2 dw 0
 
-SECTION sys_routine vstart=0 align=16
+;----------例程段----------
     alloc_a_4k_page:
 	push ebx
 	push ecx
 	push edx
 	push ds
 
-	mov eax,0x0038
+	mov eax,0x0010
 	mov ds,eax
 	
 	xor eax,eax
@@ -407,7 +421,7 @@ SECTION sys_routine vstart=0 align=16
 	jl .b1
 
 	mov ebx,msg_not_have_page
-	call far [printString]
+	call printString
 	hlt
 
 	.b2:
@@ -424,7 +438,7 @@ SECTION sys_routine vstart=0 align=16
 	push esi
 	push ds
 
-	mov eax,0x0020
+	mov eax,0x0010
 	mov ds,eax
 
 	mov esi,ebx
@@ -509,60 +523,8 @@ SECTION sys_routine vstart=0 align=16
 		loop .waits
 
 	popad
-    	retf
+    	ret
 
-    set_Call_GDT:
-        push ebp
-        or ax,bx
-        and ebx,0xffff0000
-        or bl,cl
-
-        push edx
-
-        mov edx,0x0000ec00
-        or ebx,edx
-
-        pop edx
-
-        push ds
-        push ax
-
-        mov ax,0x38
-        mov ds,ax
-
-        pop ax
-
-        sgdt [gdt_size]
-
-        mov ebp,[gdt_in]
-        mov di,[gdt_size]
-        and edi,0x0000ffff
-        inc edi
-        add ebp,edi
-
-        push es
-        push eax
-
-        mov eax,0x20
-        mov es,eax
-
-        pop eax
-
-        mov es:[ebp+0x00],eax
-        mov es:[ebp+0x04],ebx
-
-        add word [gdt_size],8
-
-        lgdt [gdt_size]
-
-	mov ebx,edi
-
-        pop es
-
-        pop ds
-        pop ebp
-
-        retf
     set_gdt:
         push edx
         push es
@@ -570,17 +532,17 @@ SECTION sys_routine vstart=0 align=16
 
         push eax
 
-        mov eax,0x0038
+        mov eax,0x0010
         mov es,ax
 
-        mov eax,0x0020
+        mov eax,0x0010
         mov ds,eax
 
         pop eax
 
         sgdt [es:gdt_size]
 
-        call 0x0040:make_DT
+        call make_DT
 
         xor ebx,ebx
         mov bx,[es:gdt_size]
@@ -618,6 +580,8 @@ SECTION sys_routine vstart=0 align=16
     print_String:
         push ecx
 
+	cli
+
         .get_char:
             mov cl,[ebx]
             or cl,cl
@@ -627,6 +591,7 @@ SECTION sys_routine vstart=0 align=16
         jmp .get_char
 
         .over:
+	sti
         pop ecx
         retf
 
@@ -668,12 +633,12 @@ SECTION sys_routine vstart=0 align=16
 
         .put_other:
             push es
-            mov eax,0x0018
+            mov eax,0x0010
             mov es,eax
 
             shl bx,1
 
-            mov [es:bx],cl
+            mov [es:0x800b8000+ebx],cl
             pop es
             shr bx,1
             inc bx
@@ -684,12 +649,12 @@ SECTION sys_routine vstart=0 align=16
             push es
             push ds
 
-            mov eax,0x0018
+            mov eax,0x0010
             mov ds,eax
             mov es,eax
 
-            mov edi,0x00
-            mov esi,0xa0
+            mov edi,0x800b8000
+            mov esi,0x800b8a00
 
             cld
 
@@ -700,7 +665,7 @@ SECTION sys_routine vstart=0 align=16
             mov ecx,80
 
             .cls:
-                mov word es:[bx],0x0720
+                mov word es:[0x800b8000+ebx],0x0720
                 add bx,2
                 loop .cls
 
@@ -729,8 +694,16 @@ SECTION sys_routine vstart=0 align=16
         popad
         retf
 
-    ;times 512-($-$$) db 1
+    make_CGDT:;输入：ax=描述符选择子，ebx=32位偏移,cx=类型及属性
+    	      ;返回：eax=低32位,edx=高32位
+	shl eax,16
+	mov ax,bx
+	mov edx,ebx
+	and edx,0xffff0000
+	or edx,0x0000ee00
 
+    	ret
+   
 SECTION train
 
 core_end: 
