@@ -3,6 +3,7 @@ SECTION sys_core vstart=0x80010000
 core_len dd core_end
 
 core_entry dd main
+[bits 32]
     main:
         mov ebp,esp
 
@@ -78,7 +79,7 @@ core_entry dd main
 	;设置8259A从片
 	mov al,0x11;边沿触发，多片使用，初始化ICW4
 	out 0x20,al
-	mov al,0x70;中断向量起点0x70
+	mov al,0x50;中断向量起点0x70
 	out 0x21,al
 	mov al,0x04;从片连接主片IRQ2
 	out 0x21,al
@@ -349,10 +350,43 @@ core_entry dd main
 	pop eax
     	ret
 
-    int_0x86:
+    int_0x86:;具体见READED.md
+    	pushad
+
+	cmp al,0x0001
+	je .print
+
+	cmp al,0x0002
+	je .readDisk
+
+	.print:
+		mov ax,0x28
+		mov ds,ax
+		call printString
+		jmp .exit
+
+	.readDisk:
+		mov eax,edx
+		dec ecx
+		.b1:
+			call read_Disk
+			add ebx,0x000001ff
+			inc eax
+		loop .b1
+		jmp .exit
+
+	.exit:
+	popad
     	iretd
 
     int_0x50:
+    	pushad
+
+	mov al,0x20
+	out 0xa0,al
+	out 0x20,al
+
+	popad
     	iretd
 
     exception_handling:
@@ -473,7 +507,7 @@ core_entry dd main
 	pop esi
 	pop ebx
 	pop eax
-	retf
+	ret
 
     read_Disk:
     	pushad
@@ -558,7 +592,7 @@ core_entry dd main
         pop ds
         pop es
         pop edx
-        retf
+        ret
 
     make_DT:
         mov edx,eax
@@ -575,7 +609,7 @@ core_entry dd main
 
         or edx,ecx
 
-        retf
+        ret
 
     print_String:
         push ecx
@@ -593,7 +627,7 @@ core_entry dd main
         .over:
 	sti
         pop ecx
-        retf
+        ret
 
     print_Char:
         pushad
@@ -692,7 +726,7 @@ core_entry dd main
             out dx,al
 
         popad
-        retf
+        ret
 
     make_CGDT:;输入：ax=描述符选择子，ebx=32位偏移,cx=类型及属性
     	      ;返回：eax=低32位,edx=高32位
