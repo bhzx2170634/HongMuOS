@@ -386,6 +386,50 @@ core_entry dd main
 	out 0xa0,al
 	out 0x20,al
 
+	mov al,0x0c
+	out 0x70,al
+	in al,0x71
+
+	mov eax,TCB
+	.b0:
+		mov ebx,[eax]
+		or ebx,ebx
+		jz .exit
+		cmp word [ebx+0x04],0xffff
+		je .b1
+		mov eax,ebx
+		jmp .b1
+
+	.b1:
+		mov ecx,[ebx]
+		mov [eax],ecx
+	
+	.b2:
+		mov edx,[eax]
+		or edx,edx
+		jz .b3
+		mov eax,ebx
+		jmp .b2
+
+	.b3:
+		mov [eax],ebx
+		mov dword [ebx],0x00000000
+
+		mov eax,TCB
+		
+		.b4:
+			mov eax,[eax]
+			or eax,eax
+			jz .exit
+			cmp word [eax+0x04],0x0000
+			jnz .b4
+
+			not word [eax+0x04]
+			not word [ebx+0x04]
+
+			jmp far [eax+0x14]
+
+	.exit:
 	popad
     	iretd
 
