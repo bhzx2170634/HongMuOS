@@ -111,7 +111,7 @@ core_entry dd main
 
 	mov ebx,system_string
 
-        call print_String
+        call code_4G_seg:print_String
         
         mov eax,0x80000002
         cpuid
@@ -137,11 +137,11 @@ core_entry dd main
 
         mov ebx,CPU_data
 
-        call print_String
+        call code_4G_seg:print_String
 
 	mov ebx,[core_next_laddr]
 
-	call alloc_inst_a_page
+	call code_4G_seg:alloc_inst_a_page
 
 	add dword [core_next_laddr],4096
 
@@ -158,14 +158,14 @@ core_entry dd main
 	mov ebx,103
 	mov ecx,0x00408900
 
-	call set_gdt
+	call code_4G_seg:set_gdt
 
 	mov [program_man_tss+4],bx
 
 	ltr cx
 
 	mov ebx,[core_next_laddr]
-	call alloc_inst_a_page
+	call code_4G_seg:alloc_inst_a_page
 	add dword [core_next_laddr],4096
 
 	mov dword es:[ebx+0x06],0
@@ -173,13 +173,13 @@ core_entry dd main
 	mov word es:[ebx+0x0a],0xffff
 
 	mov ecx,ebx
-	call addTIT
+	call code_4G_seg:addTIT
 
 	push dword 100
 
 	push ecx
 
-	call load_relocate_program
+	call code_4G_seg:load_relocate_program
 
         hlt
 
@@ -198,16 +198,16 @@ core_entry dd main
 	.b1:
 	mov dword es:[ebx+esi*4],0x00000000
 	inc esi
-	cmp esi,0x512
+	cmp esi,512
 	jl .b1
 
-	mov eax,0x38
-	mov ds,eax
+	mov eax,cr3
+	mov cr3,eax
 
 	mov eax,[ebp+12*4]
 	mov ebx,core_buff
 
-	call read_Disk
+	call code_4G_seg:read_Disk
 
 	mov eax,[core_buff]
 	and ebx,0xfffff000
@@ -224,13 +224,13 @@ core_entry dd main
 	.b2:
 	mov ebx,es:[esi+0x06]
 	add dword es:[esi+0x06],0x1000
-	call alloc_inst_a_page
+	call code_4G_seg:alloc_inst_a_page
 
 	push ecx
 	mov ecx,8
 
 	.b3:
-	call far [readDisk]
+	call code_4G_seg:read_Disk
 	inc eax
 	loop .b3
 
@@ -238,7 +238,7 @@ core_entry dd main
 	loop .b2
 
 	mov ebx,[core_next_laddr]
-	call 0x0040:alloc_inst_a_page
+	call code_4G_seg:alloc_inst_a_page
 	add dword [core_next_laddr],4096
 
 	mov es:[esi+0x14],ebx
@@ -246,17 +246,17 @@ core_entry dd main
 
 	mov ebx,es:[esi+0x06]
 	add dword es:[esi+0x06],0x1000
-	call 0x0040:alloc_inst_a_page
+	call code_4G_seg:alloc_inst_a_page
 	mov es:[esi+0x0c],ebx
 
 	mov eax,0x00000000
 	mov ebx,0x000fffff
 	mov ecx,0x00c0f800
 
-	call 0x0040:make_DT
+	call code_4G_seg:make_DT
 
 	mov ebx,esi
-	call fill_descriptor_ldt
+	call code_4G_seg:fill_descriptor_ldt
 
 	mov ebx,es:[esi+0x14]
 
@@ -266,7 +266,7 @@ core_entry dd main
 	mov ebx,0x000fffff
 	mov ecx,0x00c0f200
 
-	call 0x0040:make_DT
+	call code_4G_seg:make_DT
 
 	mov ebx,es:[esi+0x14]
 
