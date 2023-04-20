@@ -1,3 +1,6 @@
+code_4G_seg equ 0x0008
+data_4G_seg equ 0x0010
+
 SECTION sys_core vstart=0x80010000
 
 core_len dd core_end
@@ -8,7 +11,7 @@ core_entry dd main
         mov ebp,esp
 
 	mov ebx,[core_next_laddr]
-	call alloc_inst_a_page
+	call code_4G_seg:alloc_inst_a_page
 
 	mov [pidt+2],ebx
 
@@ -16,7 +19,7 @@ core_entry dd main
 	mov ax,cs
 	mov cx,0x8e00
 	mov ebx,exception_handling
-	call make_CGDT
+	call code_4G_seg:make_CGDT
 	pop ebx
 
 	xor esi,esi
@@ -31,7 +34,7 @@ core_entry dd main
 	mov ebx,hardware_interruption_handling
 	mov ax,cs
 	mov cx,0x8e00
-	call make_CGDT
+	call code_4G_seg:make_CGDT
 	pop ebx
 
 	.idt1:
