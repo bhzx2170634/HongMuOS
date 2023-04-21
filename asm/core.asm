@@ -9,6 +9,9 @@ core_entry dd main
 [bits 32]
     main:
         mov ebp,esp
+	
+	mov eax,code_4G_seg
+	mov ds,eax
 
 	mov ebx,[core_next_laddr]
 	call code_4G_seg:alloc_inst_a_page
@@ -213,7 +216,7 @@ core_entry dd main
 	and ebx,0xfffff000
 	add ebx,0x1000
 	test eax,0x00000fff
-	cmovz eax,ebx
+	cmovnz eax,ebx
 
 	mov ecx,eax
 	shr ecx,12
@@ -268,6 +271,9 @@ core_entry dd main
 
 	call code_4G_seg:make_DT
 
+	mov ebx,esi
+	call code_4G_seg:fill_descriptor_ldt
+
 	mov ebx,es:[esi+0x14]
 
 	mov es:[ebx+84],cx;填写TSS的ds
@@ -285,7 +291,7 @@ core_entry dd main
 	push edx
 	push edi
 
-	mov ecx,0x0020
+	mov ecx,data_4G_seg
 	mov ds,ecx
 
 	mov edi,[ebx+0x0c]
@@ -512,7 +518,7 @@ core_entry dd main
 	pop edx
 	pop ecx
 	pop ebx
-	ret
+	retf
     alloc_inst_a_page:
     	push eax
 	push ebx
@@ -554,7 +560,7 @@ core_entry dd main
 	pop esi
 	pop ebx
 	pop eax
-	ret
+	retf
 
     read_Disk:
     	pushad
@@ -604,7 +610,7 @@ core_entry dd main
 		loop .waits
 
 	popad
-    	ret
+    	retf
 
     set_gdt:
         push edx
@@ -639,7 +645,7 @@ core_entry dd main
         pop ds
         pop es
         pop edx
-        ret
+        retf
 
     make_DT:
         mov edx,eax
@@ -674,7 +680,7 @@ core_entry dd main
         .over:
 	sti
         pop ecx
-        ret
+        retf
 
     print_Char:
         pushad
@@ -783,7 +789,7 @@ core_entry dd main
 	and edx,0xffff0000
 	or edx,0x0000ee00
 
-    	ret
+    	retf
    
 SECTION train
 
